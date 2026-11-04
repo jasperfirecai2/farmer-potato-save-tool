@@ -3,65 +3,86 @@ A PowerShell tool for reading, editing, and re-signing local save files of Farme
 
 # fapi-save-tool
 
-PowerShell-инструмент для чтения, редактирования и повторной подписи локальных
-сохранений игры **Farmer Against Potatoes Idle**.
+A PowerShell tool for reading, editing, and re-signing local
 
-## Что делает
+saves for **Farmer Against Potatoes Idle**.
 
-- Распаковывает gzip-сейв (`fapi-save.txt`).
-- Разбирает содержимое: `JSON + Base64(SHA256(salt + json))`.
-- Позволяет прибавить (или установить) значение к указанным полям JSON.
-- Пересчитывает подпись.
-- Запаковывает обратно в gzip в том же формате, что использует игра.
-- Делает резервную копию `.bak` рядом с оригиналом.
 
-## Требования
+## What it does
+
+- Unpacks the gzip save file (`fapi-save.txt`).
+
+- Parses the contents: `JSON + Base64(SHA256(salt + json))`.
+
+- Allows you to add (or set) a value to specified JSON fields.
+
+- Recalculates the signature.
+
+- Repacks it into gzip in the same format used by the game.
+
+- Creates a `.bak` backup file next to the original.
+
+## Requirements
 
 - Windows 10 / 11.
-- PowerShell 5.1 (встроен в Windows) или PowerShell 7+.
-- Установленная игра *Farmer Against Potatoes Idle*.
 
-## Установка
+- PowerShell 5.1 (built into Windows) or PowerShell 7+.
 
-1. Скачай `Boost-Save.ps1` из этого репозитория.
-2. Положи в любую папку, например `C:\Tools\`.
+- *Farmer Against Potatoes Idle* must be installed.
 
-При первом запуске PowerShell может блокировать скрипт. Разреши его выполнение
-для текущей сессии:
+## Installation
+
+1. Download Boost-Save.ps1 from this repository.
+
+2. Place it in any folder, such as C:\Tools\.
+
+
+When you run it for the first time, PowerShell may block the script. Allow it to run for the current session:
+
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
-Использование
-Сухой прогон (ничего не пишет, только показывает, что будет):
 
-.\Boost-Save.ps1 -DryRun
-Прибавить значение к FreeSoul и TotalSoul:
+### Usage 
 
-.\Boost-Save.ps1 -Value 1000000000
-Прибавить только к одному полю:
+Dry run (doesn’t write anything, just shows what will happen)
 
-.\Boost-Save.ps1 -Value 500000000 -Fields FreeSoul
-Прибавить к нескольким полям сразу:
 
-.\Boost-Save.ps1 -Value 1000000 -Fields FreeSoul,TotalSoul,SpentSoul
-Указать путь вручную (если автоопределение не сработало):
+.\Boost-Save.ps1 -DryRun Add a value to FreeSoul and TotalSoul
 
-.\Boost-Save.ps1 -SaveDir "C:\path\to\save\folder"
-Скрипт по умолчанию прибавляет к текущему значению, а не заменяет.
 
-Отказ от ответственности
-Инструмент изменяет локальные файлы сохранений. Использование может нарушать
-Steam Subscriber Agreement и/или правила конкретной игры.
+.\Boost-Save.ps1 -Value 1000000000 Add to only one field
 
-Автор не несёт ответственности за:
 
-повреждённые или потерянные сохранения,
+.\Boost-Save.ps1 -Value 500000000 -Fields FreeSoul Add to multiple fields at once
 
-перезапись файлов через Steam Cloud,
+.\Boost-Save.ps1 -Value 500000000 -Fields ReincarnationLevel -MinIndex 2 Grab only matches past a certain index for duplicates
 
-сброс лидербордов, флаги аккаунта или блокировки,
 
-любые другие последствия использования инструмента.
+.\Boost-Save.ps1 -Value 1000000 -Fields FreeSoul,TotalSoul,SpentSoul Specify the path manually (if auto-detection didn’t work):
 
-Используйте на свой риск. Перед использованием сохраните копию оригинального
-сейва в надёжном месте.
+
+.\Boost-Save.ps1 -SaveDir “C:\path\to\save\folder” By default, the script adds to the current value rather than replacing it.
+
+
+Disclaimer: This tool modifies local save files. Using it may violate the Steam Subscriber Agreement and/or the rules of a specific game.
+
+
+The author is not responsible for:
+
+
+corrupted or lost saves,
+
+
+files being overwritten via Steam Cloud,
+
+
+reset leaderboards, account flags, or bans,
+
+
+any other consequences of using this tool.
+
+
+Use at your own risk. Before using this tool, save a copy of your original save file in a safe place.
+
+Translated using DeepL

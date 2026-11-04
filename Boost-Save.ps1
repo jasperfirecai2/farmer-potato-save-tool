@@ -3,6 +3,7 @@ param(
     [string]$FileName = "fapi-save.txt",
     [string]$Salt     = "A Potato has more Chromosomes than a Human being",
     [double]$Value    = 99999999,
+    [double]$MinIndex = 0,
     [string[]]$Fields = @("FreeSoul","TotalSoul"),
     [switch]$DryRun
 )
@@ -11,13 +12,13 @@ $ErrorActionPreference = "Stop"
 
 $savePath = Join-Path $SaveDir $FileName
 if (-not (Test-Path $savePath)) {
-    Write-Host "Файл не найден: $savePath" -ForegroundColor Red
+    Write-Host "File not found: $savePath" -ForegroundColor Red
     return
 }
 
 $bytes = [System.IO.File]::ReadAllBytes($savePath)
 if ($bytes.Length -lt 10 -or $bytes[0] -ne 0x1F -or $bytes[1] -ne 0x8B) {
-    Write-Host "Это не gzip-файл. Первые байты: $((($bytes[0..3]) | ForEach-Object { $_.ToString('X2') }) -join ' ')" -ForegroundColor Red
+    Write-Host "This is not a gzip file. First bytes:  $((($bytes[0..3]) | ForEach-Object { $_.ToString('X2') }) -join ' ')" -ForegroundColor Red
     return
 }
 
@@ -27,11 +28,11 @@ $msOut = New-Object System.IO.MemoryStream
 try { $gzIn.CopyTo($msOut) } finally { $gzIn.Dispose(); $msIn.Dispose() }
 $raw = [System.Text.Encoding]::UTF8.GetString($msOut.ToArray())
 
-Write-Host "Распаковано: $($raw.Length) символов" -ForegroundColor Cyan
+Write-Host "Unpacked: $($raw.Length) characters" -ForegroundColor Cyan
 
 $sigMatch = [regex]::Match($raw, '([A-Za-z0-9+/]{43}=)\s*$')
 if (-not $sigMatch.Success) {
-    Write-Host "Не нашли Base64-подпись в конце." -ForegroundColor Red
+    Write-Host "Did not find a Base64 signature at the end." -ForegroundColor Red
     return
 }
 $oldSig = $sigMatch.Groups[1].Value
@@ -41,7 +42,7 @@ $firstBrace = $body.IndexOf('{')
 $lastBrace  = $body.LastIndexOf('}')
 $json = $body.Substring($firstBrace, $lastBrace - $firstBrace + 1)
 
-Write-Host "Старая подпись: $oldSig" -ForegroundColor DarkGray
+Write-Host "Old signature: $oldSig" -ForegroundColor DarkGray
 
 $enc       = [System.Text.Encoding]::UTF8
 $saltBytes = $enc.GetBytes($Salt)
@@ -54,7 +55,7 @@ function Get-Sig([string]$text) {
 
 $checkSig = Get-Sig $json
 if ($checkSig -ne $oldSig) {
-    Write-Host "ВНИМАНИЕ: подпись оригинала не совпала. Продолжаем всё равно." -ForegroundColor Yellow
+    Write-Host "WARNING: The original signature did not match. Continuing anyway." -ForegroundColor Yellow
 }
 
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -63,34 +64,42 @@ $newJson = $json
 foreach ($field in $Fields) {
     $pat = '"' + [regex]::Escape($field) + '":(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)'
     $re  = [regex]::new($pat)
-    $m   = $re.Match($newJson)
+    $m   = $re.Matches($newJson)
     if (-not $m.Success) {
-        Write-Host "  [$field] не найдено в JSON — пропускаем" -ForegroundColor Yellow
+        Write-Host "  [$field] not found in JSON — skipping" -ForegroundColor Yellow
         continue
     }
+    
+    $counter = 1
+    foreach ($match in $m) {
+        if ($counter -ge $MinIndex) {
+            $oldValStr = $match.Groups[1].Value
+            $oldVal    = [double]::Parse($oldValStr, $inv)
+            $newValNum = $oldVal + $Value
 
-    $oldValStr = $m.Groups[1].Value
-    $oldVal    = [double]::Parse($oldValStr, $inv)
-    $newValNum = $oldVal + $Value
+            if ($oldValStr -match '[.\eE]') {
+                $newValStr = $newValNum.ToString("R", $inv)
+                if ($newValStr -notmatch '[.\eE]') { $newValStr += ".0" }
+            } else {
+                $newValStr = [long]$newValNum
+            }
 
-    if ($oldValStr -match '[.\eE]') {
-        $newValStr = $newValNum.ToString("R", $inv)
-        if ($newValStr -notmatch '[.\eE]') { $newValStr += ".0" }
-    } else {
-        $newValStr = [long]$newValNum
+            $newJson = $newJson.Substring(0, $match.Index) + '"' + $field + '":' + $newValStr + $newJson.Substring($match.Index + $match.Length)
+            Write-Host ("  [{0}] {1} + {2} -> {3}" -f $field, $oldValStr, $Value, $newValStr) -ForegroundColor Green
+        }
+        $counter++
     }
 
-    $newJson = $newJson.Substring(0, $m.Index) + '"' + $field + '":' + $newValStr + $newJson.Substring($m.Index + $m.Length)
-    Write-Host ("  [{0}] {1} + {2} -> {3}" -f $field, $oldValStr, $Value, $newValStr) -ForegroundColor Green
+    
 }
 
 if ($newJson -eq $json) {
-    Write-Host "Ничего не изменилось." -ForegroundColor Yellow
+    Write-Host "Nothing has changed." -ForegroundColor Yellow
     return
 }
 
 $newSig = Get-Sig $newJson
-Write-Host "Новая подпись : $newSig" -ForegroundColor Green
+Write-Host "New signature: $newSig" -ForegroundColor Green
 
 $plain = $newJson + $newSig
 $plainBytes = $enc.GetBytes($plain)
@@ -102,7 +111,7 @@ $gzBytes = $msGz.ToArray()
 
 if ($DryRun) {
     Write-Host ""
-    Write-Host "DRY RUN: файл НЕ записан. Размер нового gzip: $($gzBytes.Length) байт" -ForegroundColor Yellow
+    Write-Host "DRY RUN: file NOT written. New gzip size: $($gzBytes.Length) bytes" -ForegroundColor Yellow
     return
 }
 
@@ -110,8 +119,13 @@ $backup = $savePath + ".bak"
 Copy-Item -LiteralPath $savePath -Destination $backup -Force
 [System.IO.File]::WriteAllBytes($savePath, $gzBytes)
 
-Write-Host ""
-Write-Host "Готово." -ForegroundColor Green
-Write-Host "  Файл:   $savePath" -ForegroundColor Green
-Write-Host "  Размер: $($gzBytes.Length) байт (было $($bytes.Length))" -ForegroundColor Green
-Write-Host "  Бэкап:  $backup" -ForegroundColor Green
+
+Write-Host “”
+
+Write-Host “Done.” -ForegroundColor Green
+
+Write-Host “  File:   $savePath” -ForegroundColor Green
+
+Write-Host “  Size: $($gzBytes.Length) bytes (was $($bytes.Length))” -ForegroundColor Green
+
+Write-Host “  Backup:  $backup” -ForegroundColor Green
